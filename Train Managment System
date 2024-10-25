@@ -1,0 +1,181 @@
+ode
+from flask import Flask, request, redirect, url_for, render_template_string
+
+app = Flask(__name__)
+
+# Global list to hold trains (id, name, type, load, priority)
+train_queue = []  #empty queue
+
+# Define a dictionary for train type priorities
+train_type_priority = {
+    "Local": 1,             # Lowest priority
+    "Regular": 2,
+    "Express": 3,
+    "Urgent": 4,
+    "Emergency Express": 5  # Highest priority
+}
+
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    if request.method == 'POST':
+        # Get train details from the form
+        train_id = request.form.get('train_id')
+        train_name = request.form.get('train_name')
+        train_type = request.form.get('train_type')
+        passenger_load = int(request.form.get('passenger_load'))
+        
+        # Get the priority based on train type
+        priority = train_type_priority.get(train_type, 0)  # Default to 0 if type not found
+
+        # Add train to the queue (list)
+        train_queue.append((train_id, train_name, train_type, passenger_load, priority))
+
+        # Sort trains by priority (highest first)
+        train_queue.sort(key=lambda x: x[4], reverse=True)
+
+        return redirect(url_for('index'))
+
+    # Render the HTML form
+    return render_template_string('''
+        <!doctype html>
+        <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+            <title>Train Management System</title>
+            <style>
+              @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+              body {
+                  font-family: 'Roboto', sans-serif;
+                  background-color: #e9f5ff;
+                  margin: 20px;
+                  color: #333;
+              }
+              h1 {
+                  color: #2c3e50;
+                  text-align: center;
+                  font-weight: 700;
+                  margin-bottom: 30px;
+              }
+              form {
+                  background-color: #ffffff;
+                  padding: 15px;
+                  border-radius: 10px;
+                  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                  margin-bottom: 20px;
+                  transition: all 0.3s ease;
+              }
+              form:hover {
+                  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+              }
+              label {
+                  font-weight: 500;
+                  margin-bottom: 5px;
+              }
+              input, select {
+                  padding: 8px 10px;
+                  margin-bottom: 15px;
+                  border-radius: 5px;
+                  border: 1px solid #ccc;
+                  width: 100%;
+                  font-size: 16px;
+              }
+              button {
+                  background-color: #007bff;
+                  color: white;
+                  border: none;
+                  padding: 10px;
+                  border-radius: 5px;
+                  cursor: pointer;
+                  width: 100%;
+                  font-size: 16px;
+                  transition: background-color 0.3s ease;
+              }
+              button:hover {
+                  background-color: #0056b3;
+              }
+              h2 {
+                  margin-top: 20px;
+                  font-weight: 500;
+              }
+              ul {
+                  list-style-type: none;
+                  padding: 0;
+              }
+              li {
+                  background: #f9f9f9;
+                  padding: 15px;
+                  margin-bottom: 10px;
+                  border-radius: 5px;
+                  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+              }
+              li span {
+                  font-weight: 500;
+                  color: #333;
+              }
+              .dispatch-message {
+                  font-weight: bold;
+                  color: #e74c3c;
+                  text-align: center;
+                  margin-top: 20px;
+              }
+            </style>
+          </head>
+          <body>
+            <h1>Train Management System</h1>
+            <form action="/" method="POST">
+                <label for="train_id">Train ID:</label>
+                <input type="text" name="train_id" required>
+                <label for="train_name">Train Name:</label>
+                <input type="text" name="train_name" required>
+                <label for="train_type">Train Type:</label>
+                <select name="train_type" required>
+                    <option value="Local">Local</option>
+                    <option value="Regular">Regular</option>
+                    <option value="Express">Express</option>
+                    <option value="Urgent">Urgent</option>
+                    <option value="Emergency Express">Emergency Express</option>
+                </select>
+                <label for="passenger_load">Passenger Load:</label>
+                <input type="number" name="passenger_load" required>
+                <button type="submit">Add Train</button>
+            </form>
+            <h2>Current Trains in Queue:</h2>
+            <ul>
+              {% for train in trains %}
+                <li>
+                  <span>ID: {{ train[0] }}</span> 
+                  <span>Name: {{ train[1] }}</span> 
+                  <span>Type: {{ train[2] }}</span> 
+                  <span>Load: {{ train[3] }}</span> 
+                  <span>Priority: {{ train[4] }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+            <h2>Dispatch Train:</h2>
+            <form action="/dispatch" method="POST">
+                <button type="submit">Dispatch Highest Priority Train</button>
+            </form>
+            {% if dispatched_message %}
+              <p class="dispatch-message">{{ dispatched_message }}</p>
+            {% endif %}
+          </body>
+        </html>
+    ''', trains=train_queue, dispatched_message=request.args.get('message'))
+
+@app.route('/dispatch', methods=['POST'])
+def dispatch():
+    if train_queue:
+        # Dispatch the highest priority train
+        dispatched_train = train_queue.pop(0)  # Get the first train (highest priority)
+        message = f"Dispatched train: {dispatched_train[1]} (ID: {dispatched_train[0]}) with priority {dispatched_train[4]}."
+    else:
+        message = "No trains to dispatch."
+
+    return redirect(url_for('index', message=message))
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5001)
