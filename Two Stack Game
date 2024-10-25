@@ -1,0 +1,161 @@
+from flask import Flask, request, jsonify, render_template_string
+
+app = Flask(__name__)
+
+# Two Stacks Game Logic
+def two_stacks(max_sum, stack_a, stack_b):
+    i, j = 0, 0
+    current_sum = 0
+    max_count = 0
+    steps = []  # To record each step
+
+    # Take elements from stack A as much as possible within max_sum
+    while i < len(stack_a) and current_sum + stack_a[i] <= max_sum:
+        current_sum += stack_a[i]
+        steps.append((current_sum, 'A', stack_a[i], i + 1))  # Record the step
+        i += 1
+
+    # Initial max count is based on elements taken from stack A
+    max_count = i
+
+    # Try adding elements from stack B while removing from stack A if needed
+    while j < len(stack_b) and i >= 0:
+        current_sum += stack_b[j]
+        steps.append((current_sum, 'B', stack_b[j], i + j + 1))  # Record the step
+        j += 1
+
+        while current_sum > max_sum and i > 0:
+            i -= 1
+            current_sum -= stack_a[i]
+            steps.append((current_sum, 'Remove A', stack_a[i], i + j))  # Record the step
+
+        if current_sum <= max_sum:
+            max_count = max(max_count, i + j)
+
+    return max_count, steps
+
+# HTML + JavaScript for the frontend
+html_template = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Two Stacks Game</title>
+    <style>
+        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f0f2f5; }
+        .container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); width: 500px; text-align: center; }
+        input { width: 100%; padding: 8px; margin: 10px 0; border-radius: 4px; border: 1px solid #ccc; }
+        button { width: 100%; padding: 10px; background-color: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px; }
+        button:hover { background-color: #0056b3; }
+        .result { margin-top: 20px; font-size: 1.2em; }
+        .stacks { display: flex; justify-content: space-between; margin-top: 20px; }
+        .stack { width: 45%; text-align: center; border: 2px solid #007bff; border-radius: 5px; padding: 10px; min-height: 150px; position: relative; overflow: hidden; }
+        .block { background: #007bff; color: white; margin: 5px auto; width: 70%; border-radius: 3px; transition: all 0.5s ease; }
+        .step { margin: 10px 0; font-size: 1.1em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Two Stacks Game</h1>
+        <input type="number" id="maxSum" placeholder="Enter max sum (X)" required>
+        <input type="text" id="stackA" placeholder="Enter Stack A (comma-separated)" required>
+        <input type="text" id="stackB" placeholder="Enter Stack B (comma-separated)" required>
+        <button onclick="calculateMaxScore()">Calculate Max Score</button>
+        <div class="result" id="result"></div>
+        
+        <div class="stacks">
+            <div id="stackAContainer" class="stack"></div>
+            <div id="stackBContainer" class="stack"></div>
+        </div>
+        <div class="step" id="stepDisplay"></div>
+    </div>
+
+    <script>
+        async function calculateMaxScore() {
+            const maxSum = parseInt(document.getElementById('maxSum').value);
+            const stackA = document.getElementById('stackA').value.split(',').map(Number);
+            const stackB = document.getElementById('stackB').value.split(',').map(Number);
+
+            if (isNaN(maxSum) || stackA.some(isNaN) || stackB.some(isNaN)) {
+                alert("Please enter valid inputs for max sum and stacks.");
+                return;
+            }
+
+            try {
+                const response = await fetch('/calculate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ maxSum, stackA, stackB })
+                });
+
+                const result = await response.json();
+                document.getElementById('result').innerText = 'Maximum Score: ' + result.maxScore;
+
+                visualizeSteps(result.steps, stackA, stackB);
+            } catch (error) {
+                console.error("Error:", error);
+                document.getElementById('result').innerText = "Error calculating the maximum score.";
+            }
+        }
+
+        function visualizeSteps(steps, stackA, stackB) {
+            const stackAContainer = document.getElementById('stackAContainer');
+            const stackBContainer = document.getElementById('stackBContainer');
+            stackAContainer.innerHTML = '';
+            stackBContainer.innerHTML = '';
+            const stepDisplay = document.getElementById('stepDisplay');
+            stepDisplay.innerHTML = '';
+
+            let currentSum = 0;
+            let stepIndex = 0;
+
+            const interval = setInterval(() => {
+                if (stepIndex < steps.length) {
+                    const [sum, stack, value, score] = steps[stepIndex];
+                    currentSum = sum;
+
+                    if (stack === 'A') {
+                        const block = document.createElement('div');
+                        block.className = 'block';
+                        block.innerText = value;
+                        stackAContainer.appendChild(block);
+                    } else if (stack === 'B') {
+                        const block = document.createElement('div');
+                        block.className = 'block';
+                        block.innerText = value;
+                        stackBContainer.appendChild(block);
+                    } else if (stack === 'Remove A') {
+                        const blocks = stackAContainer.children;
+                        if (blocks.length > 0) {
+                            stackAContainer.removeChild(blocks[blocks.length - 1]);
+                        }
+                    }
+
+                    stepDisplay.innerText = `Step ${stepIndex + 1}: Removed ${value} from Stack ${stack} | Current Sum: ${currentSum} | Score: ${score}`;
+                    stepIndex++;
+                } else {
+                    clearInterval(interval);
+                }
+            }, 1000); // Delay each step by 1 second
+        }
+    </script>
+</body>
+</html>
+'''
+
+@app.route('/')
+def index():
+    return render_template_string(html_template)
+
+@app.route('/calculate', methods=['POST'])
+def calculate():
+    data = request.json
+    max_sum = data['maxSum']
+    stack_a = data['stackA']
+    stack_b = data['stackB']
+    max_score, steps = two_stacks(max_sum, stack_a, stack_b)
+    return jsonify({'maxScore': max_score, 'steps': steps})
+
+if __name__ == '__main__':
+    app.run(debug=True)
