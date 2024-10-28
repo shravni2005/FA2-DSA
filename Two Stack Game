@@ -12,25 +12,31 @@ def two_stacks(max_sum, stack_a, stack_b):
     # Take elements from stack A as much as possible within max_sum
     while i < len(stack_a) and current_sum + stack_a[i] <= max_sum:
         current_sum += stack_a[i]
-        steps.append((current_sum, 'A', stack_a[i], i + 1))  # Record the step
+        steps.append(('A', stack_a[i]))  # Record the step
         i += 1
 
     # Initial max count is based on elements taken from stack A
     max_count = i
 
-    # Try adding elements from stack B while removing from stack A if needed
-    while j < len(stack_b) and i >= 0:
+    # Try adding elements from stack B while ensuring current_sum does not exceed max_sum
+    while j < len(stack_b):
         current_sum += stack_b[j]
-        steps.append((current_sum, 'B', stack_b[j], i + j + 1))  # Record the step
+        steps.append(('B', stack_b[j]))  # Record the step
         j += 1
 
+        # Check if current_sum exceeds max_sum
         while current_sum > max_sum and i > 0:
             i -= 1
             current_sum -= stack_a[i]
-            steps.append((current_sum, 'Remove A', stack_a[i], i + j))  # Record the step
+            steps.append(('Remove A', stack_a[i]))  # Record the removal step
 
+        # Update max_count
         if current_sum <= max_sum:
             max_count = max(max_count, i + j)
+
+        # If current_sum exceeds max_sum after the adjustments, break out
+        if current_sum > max_sum:
+            break
 
     return max_count, steps
 
@@ -63,7 +69,7 @@ html_template = '''
         <input type="text" id="stackB" placeholder="Enter Stack B (comma-separated)" required>
         <button onclick="calculateMaxScore()">Calculate Max Score</button>
         <div class="result" id="result"></div>
-        
+
         <div class="stacks">
             <div id="stackAContainer" class="stack"></div>
             <div id="stackBContainer" class="stack"></div>
@@ -92,14 +98,14 @@ html_template = '''
                 const result = await response.json();
                 document.getElementById('result').innerText = 'Maximum Score: ' + result.maxScore;
 
-                visualizeSteps(result.steps, stackA, stackB);
+                visualizeSteps(result.steps);
             } catch (error) {
                 console.error("Error:", error);
                 document.getElementById('result').innerText = "Error calculating the maximum score.";
             }
         }
 
-        function visualizeSteps(steps, stackA, stackB) {
+        function visualizeSteps(steps) {
             const stackAContainer = document.getElementById('stackAContainer');
             const stackBContainer = document.getElementById('stackBContainer');
             stackAContainer.innerHTML = '';
@@ -107,13 +113,11 @@ html_template = '''
             const stepDisplay = document.getElementById('stepDisplay');
             stepDisplay.innerHTML = '';
 
-            let currentSum = 0;
             let stepIndex = 0;
 
             const interval = setInterval(() => {
                 if (stepIndex < steps.length) {
-                    const [sum, stack, value, score] = steps[stepIndex];
-                    currentSum = sum;
+                    const [stack, value] = steps[stepIndex];
 
                     if (stack === 'A') {
                         const block = document.createElement('div');
@@ -132,7 +136,7 @@ html_template = '''
                         }
                     }
 
-                    stepDisplay.innerText = `Step ${stepIndex + 1}: Removed ${value} from Stack ${stack} | Current Sum: ${currentSum} | Score: ${score}`;
+                    stepDisplay.innerText = `Step ${stepIndex + 1}: ${stack === 'Remove A' ? 'Removed' : 'Added'} ${value} from Stack ${stack}`;
                     stepIndex++;
                 } else {
                     clearInterval(interval);
